@@ -1,0 +1,41 @@
+node {
+    stage("SCM Checkout") {
+        //git 'https://github.com/javahometech/my-app.git'
+        git url: 'https://github.com/nitinsuvagia/static-website-example.git',
+          branch:'master'
+        
+    }
+    //stage("MVN Package") {
+    //    def mvnHome = tool name: 'auto-maven-install-3.8.5', type: 'maven'
+    //    def mvnCMD = "${mvnHome}/bin/mvn"
+    //    sh "${mvnCMD} clean package"
+    //}
+    stage("Build Docker") {
+        sh 'docker build -t nitinsuvagia/htmlapp:1.0.0 .'
+    }
+    stage("Push Docker Image") {
+        withCredentials([string(credentialsId: 'githubpswnitin', variable: 'githubpwd')]) {
+            sh 'docker login -u nitinsuvagia -p ${githubpwd}'
+        }
+        sh 'docker push nitinsuvagia/htmlapp:1.0.0'
+    }
+    stage('Remove Old Containers') {
+        sshagent(['sshDevServer']) {
+            try{
+                def sshCmd = 'ssh -o StrictHostKeyChecking=no ec2-user@ip-172-31-39-169'
+                def dockerRM = 'docker rm -f htmlapp'
+                sh "${sshCmd} ${dockerRM}"
+            } catch(error) {
+                // Error msg
+            }
+        }
+    }
+    stage("Run Container on Dev Server") {
+        def dockerRun = 'docker run -p 8080:80 -d --name htmlapp nitinsuvagia/htmlapp:1.0.0'
+        sshagent(['sshDevServer']) {
+           sh "ssh -o StrictHostKeyChecking=no ec2-user@ip-172-31-39-169  ${dockerRun}"
+        }       
+    }
+}
+
+
